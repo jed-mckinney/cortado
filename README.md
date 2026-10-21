@@ -277,9 +277,12 @@ McKinney et al. 2025 (arXiv:2510.07365): GN_IRS12 (z = 2.009, AGN-dominated,
 fit with `--continuum poly`) and FLS_IRS8040 (z = 0.76). Each file combines
 the JWST/MIRI LRS spectrum (observed wavelengths ≤ 14.01 µm) with the
 Spitzer/IRS spectrum above it; IRS pixels with S/N below ~1 were removed.
+The MIRI LRS data are archived at MAST:
+[doi:10.17909/18v0-8068](https://doi.org/10.17909/18v0-8068); the IRS spectra
+are archival Spitzer data.
 Columns: observed wavelength [µm], F_ν [mJy], uncertainty [mJy]; the header
 lines (starting with `#`) give the source and citation. If you use these
-spectra, please cite McKinney et al. 2025.
+spectra, please cite McKinney et al. 2025 and the MAST data DOI.
 
 FLS_IRS8040 is one of the galaxies the continuum model fits poorly (reduced
 χ² ≈ 76), so it also shows what such a fit looks like.
@@ -288,7 +291,9 @@ FLS_IRS8040 is one of the galaxies the continuum model fits poorly (reduced
 ## Citing cortado
 
 If cortado is useful for your work, please cite McKinney et al. 2025,
-arXiv:2510.07365, and link to this repository.
+arXiv:2510.07365, and link to this repository. The paper's MIRI LRS spectra
+are available from MAST at
+[doi:10.17909/18v0-8068](https://doi.org/10.17909/18v0-8068).
 
 
 ## Credits

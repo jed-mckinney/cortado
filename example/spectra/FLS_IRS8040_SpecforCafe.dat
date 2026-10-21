@@ -1,6 +1,7 @@
 # FLS_IRS8040, z = 0.76: JWST/MIRI LRS + Spitzer/IRS spectrum from
 #   McKinney et al. 2025, "A JWST MIRI LRS Survey of 37 Massive Star-Forming Galaxies and AGN at
 #   Cosmic Noon -- Overview and First Results", arXiv:2510.07365 (submitted to ApJ)
+# LRS data (JWST GO 3224) archived at MAST: doi:10.17909/18v0-8068; the IRS spectrum is archival Spitzer data.
 # Please cite that paper if you use these data.
 # Combined spectrum: LRS at observed wavelengths <= 14.01 um, IRS above (fit with --seam 14.01).
 # IRS pixels with S/N below ~1 have been removed.
