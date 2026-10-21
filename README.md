@@ -2,7 +2,8 @@
 
 cortado fits PAH features, atomic and H2 emission lines, a stellar + dust
 continuum and dust/ice attenuation to the mid-infrared spectra of galaxies. 
-Similar to codes like [CAFE](https://github.com/GOALS-survey/CAFE) and [PAHFIT](https://github.com/PAHFIT/pahfit), cortado is optimized for high-redshift galaxies 
+Built on the heritage of codes like [CAFE](https://github.com/GOALS-survey/CAFE) and [PAHFIT](https://github.com/PAHFIT/pahfit), cortado differes from these 
+tools by being optimized for high-redshift galaxies 
 and R~100 spectra from JWST/MIRI LRS spectra, optionally joined
 with a Spitzer/IRS spectra and broad-band photometry. It returns integrated
 fluxes, luminosities, equivalent widths and uncertainties for every feature. 
