@@ -11,8 +11,7 @@ McKinney et al. 2026, "A JWST MIRI LRS Survey of 37 Massive Star-Forming
 Galaxies and AGN at Cosmic Noon -- Overview and First Results", ApJ, 1001, 93
 ([arXiv:2510.07365](https://arxiv.org/abs/2510.07365)).
 
-Version: 2026.10.20 (`python measure_pahs_general.py --version`; changes since
-the 2026-10-15 package are listed at the end)
+Version: 2026.10.20 (`python measure_pahs_general.py --version`)
 Contact: Jed McKinney (jed.mckinney.astro@gmail.com)
 License: MIT (see `LICENSE`)
 
