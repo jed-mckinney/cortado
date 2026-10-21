@@ -1,4 +1,4 @@
-# Example input for run_pah_fits.sh: two galaxies from McKinney et al. 2025 (arXiv:2510.07365).
+# Example input for run_pah_fits.sh: two galaxies from McKinney et al. 2026, ApJ, 1001, 93.
 # Combined LRS + IRS spectra split at 14.01 um (LRS data at MAST, doi:10.17909/18v0-8068);
 # photometry in mJy (Spitzer/MIPS, Herschel/PACS).
 # GN_IRS12 is AGN-dominated, so it is fit with the polynomial continuum (args column).

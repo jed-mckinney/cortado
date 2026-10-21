@@ -5,9 +5,9 @@ continuum and dust/ice attenuation to JWST/MIRI LRS spectra, optionally joined
 with a Spitzer/IRS spectrum and broad-band photometry. It returns integrated
 fluxes, luminosities, equivalent widths and uncertainties for every feature,
 plus a figure of the fit. It was developed for, and is described in,
-McKinney et al. 2025, "A JWST MIRI LRS Survey of 37 Massive Star-Forming
-Galaxies and AGN at Cosmic Noon -- Overview and First Results", accepted to
-ApJ ([arXiv:2510.07365](https://arxiv.org/abs/2510.07365)).
+McKinney et al. 2026, "A JWST MIRI LRS Survey of 37 Massive Star-Forming
+Galaxies and AGN at Cosmic Noon -- Overview and First Results", ApJ, 1001, 93
+([arXiv:2510.07365](https://arxiv.org/abs/2510.07365)).
 
 It grew out of the PAH fitter for the LRSz2 program, nicknamed "CAFE at home",
 hence the name. It was shared earlier as the "LRSz2 PAH fitter"; apart from
@@ -30,7 +30,7 @@ License: MIT (see `LICENSE`)
 | `sb99-10myr.txt` | Starburst99 10 Myr stellar spectrum (continuum model) |
 | `templates/jwst_miri_p750l_disp_*.fits` | MIRI LRS (P750L) resolving power vs wavelength |
 | `filters/svo/*.xml` | Filter transmission curves from the SVO Filter Profile Service: Spitzer/MIPS 24/70/160, Spitzer/IRAC 5.8/8.0, Spitzer/IRS blue peak-up, Herschel/PACS 70/100/160, JWST/MIRI F560W–F2550W, JWST/NIRCam F444W |
-| `example/` | Example table and two spectra from McKinney et al. 2025 (see Example data) |
+| `example/` | Example table and two spectra from McKinney et al. 2026 (see Example data) |
 | `LICENSE` | MIT license |
 
 Keep this folder structure: cortado finds its data files relative to
@@ -273,7 +273,7 @@ details and the validation tests.
 ## Example data
 
 `example/spectra/` holds two galaxies from the LRSz2 survey, published in
-McKinney et al. 2025 (arXiv:2510.07365): GN_IRS12 (z = 2.009, AGN-dominated,
+McKinney et al. 2026 (ApJ, 1001, 93): GN_IRS12 (z = 2.009, AGN-dominated,
 fit with `--continuum poly`) and FLS_IRS8040 (z = 0.76). Each file combines
 the JWST/MIRI LRS spectrum (observed wavelengths ≤ 14.01 µm) with the
 Spitzer/IRS spectrum above it; IRS pixels with S/N below ~1 were removed.
@@ -282,7 +282,7 @@ The MIRI LRS data are archived at MAST:
 are archival Spitzer data.
 Columns: observed wavelength [µm], F_ν [mJy], uncertainty [mJy]; the header
 lines (starting with `#`) give the source and citation. If you use these
-spectra, please cite McKinney et al. 2025 and the MAST data DOI.
+spectra, please cite McKinney et al. 2026 and the MAST data DOI.
 
 FLS_IRS8040 is one of the galaxies the continuum model fits poorly (reduced
 χ² ≈ 76), so it also shows what such a fit looks like.
@@ -290,8 +290,8 @@ FLS_IRS8040 is one of the galaxies the continuum model fits poorly (reduced
 
 ## Citing cortado
 
-If cortado is useful for your work, please cite McKinney et al. 2025 (ApJ,
-accepted; arXiv:2510.07365) and link to this repository. The paper's MIRI LRS spectra
+If cortado is useful for your work, please cite McKinney et al. 2026, ApJ,
+1001, 93 (arXiv:2510.07365), and link to this repository. The paper's MIRI LRS spectra
 are available from MAST at
 [doi:10.17909/18v0-8068](https://doi.org/10.17909/18v0-8068).
 
