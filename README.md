@@ -6,8 +6,8 @@ with a Spitzer/IRS spectrum and broad-band photometry. It returns integrated
 fluxes, luminosities, equivalent widths and uncertainties for every feature,
 plus a figure of the fit. It was developed for, and is described in,
 McKinney et al. 2025, "A JWST MIRI LRS Survey of 37 Massive Star-Forming
-Galaxies and AGN at Cosmic Noon -- Overview and First Results"
-([arXiv:2510.07365](https://arxiv.org/abs/2510.07365)).
+Galaxies and AGN at Cosmic Noon -- Overview and First Results", accepted to
+ApJ ([arXiv:2510.07365](https://arxiv.org/abs/2510.07365)).
 
 It grew out of the PAH fitter for the LRSz2 program, nicknamed "CAFE at home",
 hence the name. It was shared earlier as the "LRSz2 PAH fitter"; apart from
@@ -290,8 +290,8 @@ FLS_IRS8040 is one of the galaxies the continuum model fits poorly (reduced
 
 ## Citing cortado
 
-If cortado is useful for your work, please cite McKinney et al. 2025,
-arXiv:2510.07365, and link to this repository. The paper's MIRI LRS spectra
+If cortado is useful for your work, please cite McKinney et al. 2025 (ApJ,
+accepted; arXiv:2510.07365) and link to this repository. The paper's MIRI LRS spectra
 are available from MAST at
 [doi:10.17909/18v0-8068](https://doi.org/10.17909/18v0-8068).
 
