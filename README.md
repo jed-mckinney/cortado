@@ -1,29 +1,26 @@
 # cortado
 
 cortado fits PAH features, atomic and H2 emission lines, a stellar + dust
-continuum and dust/ice attenuation to JWST/MIRI LRS spectra, optionally joined
-with a Spitzer/IRS spectrum and broad-band photometry. It returns integrated
-fluxes, luminosities, equivalent widths and uncertainties for every feature,
-plus a figure of the fit. It was developed for, and is described in,
+continuum and dust/ice attenuation to the mid-infrared spectra of galaxies. 
+Similar to codes like [CAFE](https://github.com/GOALS-survey/CAFE) and [PAHFIT](https://github.com/PAHFIT/pahfit), cortado is optimized for high-redshift galaxies 
+and R~100 spectra from JWST/MIRI LRS spectra, optionally joined
+with a Spitzer/IRS spectra and broad-band photometry. It returns integrated
+fluxes, luminosities, equivalent widths and uncertainties for every feature. 
+It was developed for, and is described in,
 McKinney et al. 2026, "A JWST MIRI LRS Survey of 37 Massive Star-Forming
 Galaxies and AGN at Cosmic Noon -- Overview and First Results", ApJ, 1001, 93
 ([arXiv:2510.07365](https://arxiv.org/abs/2510.07365)).
-
-It grew out of the PAH fitter for the LRSz2 program, nicknamed "CAFE at home",
-hence the name. It was shared earlier as the "LRSz2 PAH fitter"; apart from
-the name and the version number, the code is the same.
 
 Version: 2026.10.20 (`python measure_pahs_general.py --version`; changes since
 the 2026-10-15 package are listed at the end)
 Contact: Jed McKinney (jed.mckinney.astro@gmail.com)
 License: MIT (see `LICENSE`)
 
-
 ## Contents
 
 | Path | What it is |
 |---|---|
-| `measure_pahs_general.py` | cortado itself: command-line tool and Python module |
+| `measure_pahs_general.py` | command-line tool and Python module |
 | `run_pah_fits.sh` | Runs cortado on every source in a CSV table |
 | `README.md` | This file |
 | `requirements.txt` | Python packages |
@@ -232,10 +229,8 @@ F_ν(λ) = A(λ) [ continuum + Σ PAH_k + Σ line_j ],   A = (1 − e^−τ)/τ
 - **Instrumental resolution:** the model is smoothed pixel by pixel with each
   instrument's resolving power before it is compared with the data (MIRI LRS
   from the P750L curve; IRS from the Instrument Handbook values for each
-  order). Smoothing conserves flux, so fluxes come from the intrinsic profiles.
-- **Photometry:** the model is integrated through each filter curve, using
-  the facility's calibration convention: a 10⁴ K blackbody for MIPS,
-  νF_ν = constant for IRAC and PACS, flat F_ν for JWST.
+  order). Fluxes come from the intrinsic profiles.
+- **Photometry:** the model is integrated through each filter curve. 
 - **Uncertainties:** from the fit covariance, scaled for each feature by the
   reduced χ² within one feature width and by the correlation of neighbouring
   residuals. In tests these are ~15–20 % larger than a residual bootstrap.
@@ -248,44 +243,16 @@ F_ν(λ) = A(λ) [ continuum + Σ PAH_k + Σ line_j ],   A = (1 − e^−τ)/τ
 The docstring at the top of `measure_pahs_general.py` gives the full
 details and the validation tests.
 
-
-## Caveats
-
-- The LRS resolving-power curve is the pre-launch pandeia table (Kendrew et
-  al. 2015). Changing R by 20–30 % moves PAH luminosities by ≤ 0.01 dex,
-  except the 11.23 µm component on its own (~0.05 dex).
-- For IRS, the order of each pixel is assumed from its wavelength (switching
-  at 7.5, 14.0 and 19.5 µm). If your IRS data say otherwise, give R in a
-  fourth column of the spectrum file.
-- The 7.42 µm component of the 7.7 µm complex is not in the default PAH
-  list, so the 7.7 µm complex total is 7.60 + 7.85 µm only. Add it with
-  `--pahs` if you need the full PAHFIT-style complex.
-- Some spectra are not described well by the continuum models (reduced χ²
-  well above 10); check the figure before using the numbers.
-- Extrapolated (dashed) parts of the model are not constrained by the
-  spectra.
-- Filters without a known calibration convention (here, the Spitzer/IRS blue
-  peak-up filter, or any other SVO filter outside JWST, MIPS, IRAC and PACS)
-  are treated as calibrated to a flat F_ν, with a warning. Check the
-  facility's convention if the colour correction matters.
-
-
 ## Example data
 
-`example/spectra/` holds two galaxies from the LRSz2 survey, published in
+`example/spectra/` holds two galaxies from the LRS survey, published in
 McKinney et al. 2026 (ApJ, 1001, 93): GN_IRS12 (z = 2.009, AGN-dominated,
-fit with `--continuum poly`) and FLS_IRS8040 (z = 0.76). Each file combines
+fit with `--continuum poly`) and GN_IRS1 (z = 1.436, SFG-dominated). Each file combines
 the JWST/MIRI LRS spectrum (observed wavelengths ≤ 14.01 µm) with the
-Spitzer/IRS spectrum above it; IRS pixels with S/N below ~1 were removed.
-The MIRI LRS data are archived at MAST:
-[doi:10.17909/18v0-8068](https://doi.org/10.17909/18v0-8068); the IRS spectra
-are archival Spitzer data.
+Spitzer/IRS spectrum above it. 
 Columns: observed wavelength [µm], F_ν [mJy], uncertainty [mJy]; the header
 lines (starting with `#`) give the source and citation. If you use these
-spectra, please cite McKinney et al. 2026 and the MAST data DOI.
-
-FLS_IRS8040 is one of the galaxies the continuum model fits poorly (reduced
-χ² ≈ 76), so it also shows what such a fit looks like.
+spectra, please cite McKinney et al. 2026.
 
 
 ## Citing cortado
@@ -307,23 +274,3 @@ cortado bundles or relies on:
   (Pontoppidan et al. 2016), based on Kendrew et al. (2015);
 - the Kemper, Vriend & Tielens (2004) silicate extinction profile as
   implemented in CAFE, and the PAH band parameters of Smith et al. (2007).
-
-
-## Changes since the 2026-10-15 package
-
-- Public release on GitHub under the MIT license. The examples are now two
-  published spectra (GN_IRS1 removed), with citation headers.
-
-- Renamed cortado; `--version` added, and the version is written to every
-  output table and fit summary. File names are unchanged.
-- Emission lines are fit to the LRS spectrum only by default (`--line-insts`).
-- The fit figure no longer has a residual panel.
-- Photometry input is more forgiving: aliases are case-insensitive; a
-  wavelength may be given as text (`'24'`); photometry may be passed to
-  `fit_spectrum` as an (n, 3) array; an unknown band name now gives an error
-  listing the valid aliases.
-- The documentation states explicitly how numeric photometry is treated (a
-  delta function at that wavelength, never a filter). Its behaviour has not
-  changed.
-- Four more cached filter curves: IRAC 5.8 and 8.0 µm, IRS blue peak-up,
-  NIRCam F444W.
