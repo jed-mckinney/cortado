@@ -1,0 +1,6 @@
+# Example input for run_pah_fits.sh: two galaxies from McKinney et al. 2025 (arXiv:2510.07365),
+# combined LRS + IRS spectra split at 14.01 um; photometry in mJy (Spitzer/MIPS, Herschel/PACS).
+# GN_IRS12 is AGN-dominated, so it is fit with the polynomial continuum (args column).
+id,spec,z,seam,args,MIPS24,MIPS24_err,MIPS70,MIPS70_err,PACS70,PACS70_err,PACS100,PACS100_err
+GN_IRS12,spectra/GN_IRS12_SpecforCafe.dat,2.0091,14.01,--continuum poly,1.224,0.00682,4.03,0.322,,,15.19,0.54
+FLS_IRS8040,spectra/FLS_IRS8040_SpecforCafe.dat,0.76,14.01,,2.88,0.07,,,31.92,5.15,11.65,9.1

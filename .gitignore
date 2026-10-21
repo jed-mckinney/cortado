@@ -1,0 +1,9 @@
+# Python
+__pycache__/
+*.pyc
+# fit outputs (default output folders)
+pah_fits/
+pah_fits_table/
+my_fits/
+# OS
+.DS_Store

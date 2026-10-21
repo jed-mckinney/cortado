@@ -1,0 +1,5 @@
+# Tested with Python 3.13 and the versions below; older recent versions should work.
+numpy>=1.24        # tested 2.3.2
+scipy>=1.10        # tested 1.16.0
+astropy>=5.3       # tested 7.1.0
+matplotlib>=3.7    # tested 3.10.0
