@@ -60,6 +60,18 @@ component. The model is now forward-modelled:
   * lines are fit to the MIRI LRS pixels only (line_insts, --line-insts): the
     Spitzer/IRS spectra are only sensitive to the continuum and PAHs, so IRS
     pixels see no line emission and a line covered only by IRS is not fit.
+  * with 'PHOT' in line_insts (--line-insts LRS PHOT), PAHs in photometry-only
+    windows are modelled too: requested PAHs not fit from the spectra but with
+    >= TIE_MIN_FRAC (5%) of their profile flux inside a photometric filter's
+    window (or within one FWHM of a monochromatic point). They are not free:
+    each amplitude is the anchor PAH's (6.2 um if fit from the spectra, else
+    3.3 um) times the amplitude ratio in the LRSz2 semi-empirical f_AGN < 10%
+    template (templates/lrsz2_pah_fagn_bin1.txt; McKinney et al. 2026, ApJ,
+    1001, 93). On LRSz2, fitting LRS + photometry with PHOT lowers chi2 by a
+    median 0.11 dex, and the tied 7.7-12.7 um PAH fluxes match the IRS
+    measurements to within 0.0-0.2 dex (median) with 0.16-0.30 dex scatter,
+    which is not in their errors (those come from the anchor only). Tied
+    features are flagged 'tied' in the output table and have no S/N.
   * lines are Gaussians of intrinsic FWHM `line_fwhm_kms` (default 300 km/s,
     i.e. unresolved), convolved analytically with the same per-pixel LSF.
 
@@ -151,7 +163,7 @@ From Python:
     res = fit_spectrum(spec, z=1.44, phot=[('MIPS24', 0.45, 0.02)])
     res.table; res.summary; res.phot_table(); res.plot('fit.png')   # model_range='data' for the old style
 """
-__version__ = '2026.10.20'
+__version__ = '2026.11.17'
 
 import os
 import argparse
@@ -341,6 +353,27 @@ def drude(lam, amp, x0, fwhm):
 
 
 PROFILES = {'lorentz': lorentz, 'drude': drude}
+
+# PAHs in photometry-only windows (line_insts contains 'PHOT') are tied to an anchor PAH fit
+# from the spectra, with the amplitude ratios of the LRSz2 semi-empirical f_AGN < 10% template
+# (intrinsic PAH components of the fagn_bin1 stack fit; McKinney et al. 2026, ApJ, 1001, 93).
+PAH_TEMPLATE_FILE = os.path.join(HERE, 'templates', 'lrsz2_pah_fagn_bin1.txt')
+PAH_ANCHORS = ('PAH62', 'PAH33')     # in order of priority
+TIE_MIN_FRAC = 0.05                   # min fraction of a PAH's profile flux inside a photometric window
+_PAH_TEMPLATE = {}
+
+
+def load_pah_template(path=PAH_TEMPLATE_FILE):
+	"""{name: (x0 [um], fwhm [um], peak amplitude)} of the template PAH components."""
+	if path not in _PAH_TEMPLATE:
+		t = {}
+		for line in open(path):
+			if line.strip() and not line.startswith('#'):
+				n, x0, fw, a = line.split()
+				t[n] = (float(x0), float(fw), float(a))
+		amax = max(a for _, _, a in t.values())    # components fit to ~0 are exactly 0
+		_PAH_TEMPLATE[path] = {n: (x0, fw, a if a > 1e-6 * amax else 0.) for n, (x0, fw, a) in t.items()}
+	return _PAH_TEMPLATE[path]
 
 
 # ---------------------------------------------------------------- photometry
@@ -634,20 +667,68 @@ class MIRModel:
 		self.line_insts = tuple(line_insts)
 		self.line_pix = np.isin(spec.inst, self.line_insts)
 		self.lines = [l for l in lines if self.covered(LINES[l], 0., self.line_pix)]
-		# complexes with >= 2 requested members; reported only if all of them are fit
+		# 'PHOT': PAHs in photometry-only windows, tied to the anchor PAH (no free parameters)
+		self.tied, self.pah_anchor = {}, None
+		if 'PHOT' in self.line_insts:
+			self._setup_tied(pahs)
+		# complexes with >= 2 requested members; reported only if all of them are fit or tied
 		self.requested['complex'] = []
 		self.complexes = {}
 		for c, mem in PAH_COMPLEXES.items():
 			req = [x for x in mem if x in pahs]
 			if len(req) >= 2:
 				self.requested['complex'].append(c)
-				if all(x in self.pahs for x in req):
+				if all(x in self.pahs or x in self.tied for x in req):
 					self.complexes[c] = req
 
 		hwhm = [PAH_FEATURES[p][1] / 2 / PAH_FEATURES[p][0] for p in self.pahs]
 		self.grid = fine_grid(self.lam, self.sig, min(hwhm, default=np.inf))
 		self.K = lsf_matrix(self.lam, self.sig, self.grid)
 		self._setup_params(fit_ice, pah_shift_tol, line_shift_tol)
+
+	def _setup_tied(self, pahs, cut=0.01):
+		"""
+		PAHs in photometry-only windows: requested PAHs that are not fit from the spectra but
+		have at least TIE_MIN_FRAC of their Lorentzian profile flux inside a photometric window
+		(a filter's rest-frame range where T > cut * max T), or lie within one FWHM of a
+		monochromatic point. Their amplitudes are fixed multiples of the anchor PAH (6.2 um if
+		fit from the spectra, else 3.3 um), with the template's amplitude ratios; centres and
+		widths are the template's. Template components with ~zero amplitude (e.g. 11.23 um) are
+		tied with that ratio, so complex totals stay defined.
+		"""
+		tmpl = load_pah_template()
+		anchor = next((a for a in PAH_ANCHORS if a in self.pahs and a in tmpl), None)
+		windows = []
+		for f, lp in zip(self.filters, self.lam_phot):
+			if f is not None:
+				w = f.wave[f.trans > cut * f.trans.max()] / (1 + self.z)
+				windows.append((w.min(), w.max()))
+		points = [lp for f, lp in zip(self.filters, self.lam_phot) if f is None]
+		cand = []
+		for n in pahs:
+			if n in self.pahs or n not in tmpl:
+				continue
+			x0, fw, a = tmpl[n]
+			frac = max([(np.arctan(2 * (hi - x0) / fw) - np.arctan(2 * (lo - x0) / fw)) / np.pi
+				for lo, hi in windows] + [0.])
+			if frac >= TIE_MIN_FRAC or any(abs(x0 - lp) <= fw for lp in points):
+				cand.append(n)
+		if not cand:
+			return
+		if anchor is None:
+			warnings.warn('PHOT: no 6.2 or 3.3 um PAH is fit from the spectra, so the PAHs in '
+				'photometry-only windows (%s) are not modelled' % ', '.join(cand))
+			return
+		a0 = tmpl[anchor][2]
+		for n in cand:
+			x0, fw, a = tmpl[n]
+			self.tied[n] = (x0, fw, a / a0)
+		self.pah_anchor = anchor
+
+	def tied_pah(self, p, name, lam):
+		"""Intrinsic profile of a tied PAH: template ratio x anchor amplitude."""
+		x0, fw, r = self.tied[name]
+		return self.profile(lam, r * p[self.ix[self.pah_anchor + '_amp']], x0, fw)
 
 	# ---- photometry
 	def _setup_photometry(self, phot):
@@ -798,6 +879,8 @@ class MIRModel:
 		f = self.intrinsic_continuum(p, lam)
 		for n in self.pahs:
 			f = f + self.pah(p, n, lam)
+		for n in self.tied:
+			f = f + self.tied_pah(p, n, lam)
 		return mixed_attenuation(self.tau(p, lam)) * f
 
 	def model(self, p):
@@ -823,6 +906,12 @@ class MIRModel:
 			J[:, ix[n + '_amp']] = att * shape
 			J[:, ix[n + '_x0']] = att * amp * (self.profile(lam, 1., x0 + h, fw)
 				- self.profile(lam, 1., x0 - h, fw)) / (2 * h)
+		if self.tied:
+			ia = ix[self.pah_anchor + '_amp']
+			for n, (x0, fw, r) in self.tied.items():
+				shape = self.profile(lam, 1., x0, fw)
+				S = S + r * p[ia] * shape
+				J[:, ia] += att * r * shape
 		dS = d_mixed_attenuation(tau) * S
 		J[:, ix['tau97']] = dS * tau_silicate(lam)
 		J[:, ix['tau_ice305']] = dS * tau_ice(lam, 1.)
@@ -881,6 +970,8 @@ class MIRModel:
 		out = {'continuum': K @ (att * self.intrinsic_continuum(p, grid))}
 		for n in self.pahs:
 			out[n] = K @ (att * self.pah(p, n, grid))
+		for n in self.tied:
+			out[n] = K @ (att * self.tied_pah(p, n, grid))
 		for n in self.lines:
 			out[n] = self.line(p, n, lam, sig)
 		return out
@@ -905,6 +996,7 @@ class MIRModel:
 		R = np.interp(lam * (1 + self.z), self.spec.wave, self.spec.R)
 		sig = lam / R * FWHM2SIG
 		hwhm = [PAH_FEATURES[n][1] / 2 / PAH_FEATURES[n][0] for n in self.pahs]
+		hwhm += [fw / 2 / x0 for x0, fw, _ in self.tied.values()]
 		grid = fine_grid(lam, sig, min(hwhm, default=np.inf))
 		comp = self.components(p, lam, sig, grid=grid)
 		covered = np.zeros(lam.size, bool)
@@ -924,6 +1016,13 @@ class MIRModel:
 				I = np.pi * p[self.ix[n + '_amp']] * PAH_FEATURES[n][1] / 2   # mJy um
 			else:
 				I = p[self.ix[n + '_flux']]
+			fc = I * to_si / x0**2
+			out[n + ':lam'] = x0
+			out[n + ':flux_corr'] = fc
+			out[n + ':flux_obs'] = fc * mixed_attenuation(self.tau(p, x0))
+			out[n + ':ew'] = I / self.intrinsic_continuum(p, x0)
+		for n, (x0, fw, r) in self.tied.items():
+			I = np.pi * r * p[self.ix[self.pah_anchor + '_amp']] * fw / 2
 			fc = I * to_si / x0**2
 			out[n + ':lam'] = x0
 			out[n + ':flux_corr'] = fc
@@ -1091,7 +1190,8 @@ def fit_spectrum(spec, z, phot=None, error_scaling='local', max_nfev=20000, name
 	scales = {}
 	wins = {n: window(n) for n in m.pahs + m.lines}
 	for c, mem in m.complexes.items():     # union of the members' windows
-		wins[c] = (min(wins[n][0] for n in mem), max(wins[n][1] for n in mem))
+		if all(n in wins for n in mem):
+			wins[c] = (min(wins[n][0] for n in mem), max(wins[n][1] for n in mem))
 	for n, (lo, hi) in wins.items():
 		x0, width = (lo + hi) / 2, (hi - lo) / 2
 		c2 = local_chi2nu(m.lam, zs, x0, width)
@@ -1104,6 +1204,14 @@ def fit_spectrum(spec, z, phot=None, error_scaling='local', max_nfev=20000, name
 			if n + ':' + k in der:
 				v, e = der[n + ':' + k]
 				der[n + ':' + k] = (v, e * s)
+	# tied PAHs, and complexes with tied members, are not constrained by the data at their
+	# own wavelengths: they take the anchor's error scale
+	for n in list(m.tied) + [c for c in m.complexes if c not in wins]:
+		scales[n] = dict(scales[m.pah_anchor])
+		for k in ('lam', 'flux_obs', 'flux_corr', 'ew'):
+			if n + ':' + k in der:
+				v, e = der[n + ':' + k]
+				der[n + ':' + k] = (v, e * scales[n]['err_scale'])
 	for k in ('tau_305', 'tau_305_ice', 'tau_97'):
 		der[k] = (der[k][0], der[k][1] * np.sqrt(gscale))
 
@@ -1113,7 +1221,8 @@ def fit_spectrum(spec, z, phot=None, error_scaling='local', max_nfev=20000, name
 		'n_pix': spec.wave.size, 'n_phot': m.phot.shape[0],
 		'has_irs': bool(np.any(spec.inst == 'IRS')), 'error_scaling': error_scaling,
 		'corr_factor_LRS': fcorr['LRS'], 'corr_factor_IRS': fcorr['IRS'],
-		'partial_pahs': ','.join(m.partial)}
+		'partial_pahs': ','.join(m.partial), 'line_insts': ','.join(m.line_insts),
+		'pah_anchor': m.pah_anchor or '', 'tied_pahs': ','.join(m.tied)}
 	for k in ('tau97', 'tau_ice305'):
 		res.summary[k], res.summary[k + '_err'] = res.param(k)
 	for k in ('tau_305', 'tau_305_ice', 'tau_97'):
@@ -1126,7 +1235,7 @@ def _feature_table(m, der, name, scales):
 	lum = 4 * np.pi * dl**2 / LSUN       # W/m2 -> Lsun
 	rows = []
 	for kind, req in m.requested.items():
-		fitted = {'pah': m.pahs, 'line': m.lines, 'complex': m.complexes}[kind]
+		fitted = {'pah': list(m.pahs) + list(m.tied), 'line': m.lines, 'complex': m.complexes}[kind]
 		for n in req:
 			if kind == 'complex':
 				lam0, fw = float(n[3:]), np.nan
@@ -1145,11 +1254,16 @@ def _feature_table(m, der, name, scales):
 				det = f > 1e-6 * e
 				row['logL_' + k] = np.log10(f * lum) if det else np.nan
 				row['logL_%s_err' % k] = 0.4343 * e / f if det else np.nan
-			row['logL_corr_ul3'] = np.log10(3 * row['flux_corr_err'] * lum) if row['fitted'] else np.nan
+			tied = n in m.tied or (kind == 'complex' and any(x in m.tied for x in m.complexes.get(n, [])))
+			measured = row['fitted'] and not tied
+			# tied PAHs are predictions from the anchor, not measurements: no S/N or upper limit
+			row['logL_corr_ul3'] = np.log10(3 * row['flux_corr_err'] * lum) if measured else np.nan
 			# detection significance from the observed flux; the corrected-flux error also
 			# carries the uncertainty of the attenuation correction (1.5x larger at 3.3 um)
-			row['snr'] = row['flux_obs'] / row['flux_obs_err'] if row['fitted'] else np.nan
-			row['snr_corr'] = row['flux_corr'] / row['flux_corr_err'] if row['fitted'] else np.nan
+			row['snr'] = row['flux_obs'] / row['flux_obs_err'] if measured else np.nan
+			row['snr_corr'] = row['flux_corr'] / row['flux_corr_err'] if measured else np.nan
+			row['tied'] = tied
+			row['tied_to'] = m.pah_anchor if tied else ''
 			row.update(scales.get(n, {'err_scale': np.nan, 'chi2nu_local': np.nan, 'corr_factor': np.nan}))
 			if kind == 'pah':
 				row['coverage'], row['partial'] = m.coverage[n], n in m.partial
@@ -1174,6 +1288,8 @@ def _feature_table(m, der, name, scales):
 		'snr: flux_obs / flux_obs_err (detection significance); snr_corr: flux_corr / flux_corr_err, '
 		'which also includes the attenuation-correction uncertainty.',
 		'kind=complex: sum of the listed members; errors include their covariance.',
+		'tied: PAH in a photometry-only window (line_insts PHOT), not fit but fixed to tied_to with the '
+		'LRSz2 f_AGN<10% template ratio; a prediction (no snr), its error from the anchor only.',
 		'coverage: fraction of the feature profile flux on the data (complex: lowest member); '
 		'partial: fit from a partly covered profile (partial_pahs=True), flux relies on the fixed '
 		'profile shape and centre.',
@@ -1214,7 +1330,8 @@ def plot_fit(res, path=None, show=False, title=None, xlim=None, model_range='ful
 		comp = m.components(p, lp, sp)
 		cont = comp.pop('continuum')
 		for k, v in comp.items():
-			ax.plot(lp, cont + v, c='m' if k in m.pahs else 'g', lw=.5, ls='--' if k in m.partial else '-')
+			ax.plot(lp, cont + v, c='m' if k in m.pahs or k in m.tied else 'g', lw=.5,
+				ls='--' if k in m.partial else ':' if k in m.tied else '-')
 		ax.plot(lp, cont, c='b', lw=.7)
 		ax.plot(lp, cont + sum(comp.values()), c='r', lw=.9)
 		ax2.plot(lp, mixed_attenuation(m.tau(p, lp)), 'k:', lw=.7)
@@ -1223,7 +1340,8 @@ def plot_fit(res, path=None, show=False, title=None, xlim=None, model_range='ful
 		lp, sp, comp, cov = m.model_curve(p)
 		cont = comp.pop('continuum')
 		for k, v in comp.items():
-			ax.plot(lp, cont + v, c='m' if k in m.pahs else 'g', lw=.5, ls='--' if k in m.partial else '-')
+			ax.plot(lp, cont + v, c='m' if k in m.pahs or k in m.tied else 'g', lw=.5,
+				ls='--' if k in m.partial else ':' if k in m.tied else '-')
 		ax.plot(lp, cont, c='b', lw=.7)
 		tot = cont + sum(comp.values())
 		# solid on the data, dashed elsewhere; widen each mask by one point so the pieces join
@@ -1350,8 +1468,10 @@ def _cli():
 	ap.add_argument('--pahs', nargs='+', default=DEFAULT_PAHS, choices=list(PAH_FEATURES))
 	ap.add_argument('--lines', nargs='*', default=DEFAULT_LINES, choices=list(LINES))
 	ap.add_argument('--line-fwhm', type=float, default=300., help='intrinsic line FWHM [km/s]')
-	ap.add_argument('--line-insts', nargs='+', default=['LRS'], choices=['LRS', 'IRS'],
-		help='instruments whose spectra include atomic/H2 lines (default LRS only)')
+	ap.add_argument('--line-insts', nargs='+', default=['LRS'], choices=['LRS', 'IRS', 'PHOT'],
+		help='where spectral features are modelled: LRS / IRS = spectra whose pixels include '
+		'atomic and H2 lines (default LRS only); PHOT = also model PAHs in photometry-only windows, '
+		'tied to the 6.2 um (else 3.3 um) PAH with the LRSz2 f_AGN<10%% template ratios')
 	ap.add_argument('--partial-pahs', action='store_true',
 		help='also fit PAHs only partly covered by the data (e.g. the blue side of 7.7 um)')
 	ap.add_argument('--min-coverage', type=float, default=0.3,

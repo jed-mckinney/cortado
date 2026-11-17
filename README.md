@@ -12,7 +12,7 @@ McKinney et al. 2026, "A JWST MIRI LRS Survey of 37 Massive Star-Forming
 Galaxies and AGN at Cosmic Noon -- Overview and First Results", ApJ, 1001, 93
 ([arXiv:2510.07365](https://arxiv.org/abs/2510.07365)).
 
-Version: 2026.10.20 (`python measure_pahs_general.py --version`)
+Version: 2026.11.17 (`python measure_pahs_general.py --version`)
 Contact: Jed McKinney (jed.mckinney.astro@gmail.com)
 License: MIT (see `LICENSE`)
 
@@ -26,6 +26,7 @@ License: MIT (see `LICENSE`)
 | `requirements.txt` | Python packages |
 | `sb99-10myr.txt` | Starburst99 10 Myr stellar spectrum (continuum model) |
 | `templates/jwst_miri_p750l_disp_*.fits` | MIRI LRS (P750L) resolving power vs wavelength |
+| `templates/lrsz2_pah_fagn_bin1.txt` | PAH components of the LRSz2 semi-empirical f_AGN < 10% template (for `--line-insts ... PHOT`) |
 | `filters/svo/*.xml` | Filter transmission curves from the SVO Filter Profile Service: Spitzer/MIPS 24/70/160, Spitzer/IRAC 5.8/8.0, Spitzer/IRS blue peak-up, Herschel/PACS 70/100/160, JWST/MIRI F560W–F2550W, JWST/NIRCam F444W |
 | `example/` | Example table and two spectra from McKinney et al. 2026 (see Example data) |
 | `LICENSE` | MIT license |
@@ -68,6 +69,41 @@ One spectrum directly:
 python measure_pahs_general.py example/spectra/GN_IRS12_SpecforCafe.dat --z 2.0091 \
     --seam 14.01 --continuum poly --phot MIPS24:1.224:0.00682 --phot PACS100:15.19:0.54 \
     --outdir my_fits
+```
+
+### PAHs beyond the spectra (photometry-only windows)
+
+When photometric bands cover PAH features that the spectra do not reach, add
+`PHOT` to `--line-insts` so those PAHs are modelled, tied to the 6.2 or 3.3 µm
+PAH (see "What the model does"). To try it on the bundled data, keep only the
+LRS part of GN_IRS1 (λ_obs ≤ 14.01 µm); MIPS 24 µm then covers rest 8–12 µm,
+beyond the spectrum:
+
+```
+awk '$1 !~ /^#/ && $1 <= 14.01' example/spectra/GN_IRS1_SpecforCafe.dat > GN_IRS1_LRS.dat
+python measure_pahs_general.py GN_IRS1_LRS.dat --z 1.4362 \
+    --phot MIPS24:0.3713:0.00498 --phot MIPS70:5.62:0.347 --phot PACS100:14.6:0.47 \
+    --line-insts LRS PHOT --outdir my_fits
+```
+
+This ties eight PAHs (7.6–12.7 µm) to the 3.3 µm PAH. They are drawn dotted
+in `my_fits/GN_IRS1_LRS.png` and flagged `tied` in
+`my_fits/GN_IRS1_LRS_features.ecsv`. Two things to get right:
+
+- Keep `LRS` in the list: `--line-insts PHOT` on its own also stops the
+  emission lines from being fit to the LRS spectrum.
+- Put the spectrum file before `--line-insts` (or any other option after
+  it): `--line-insts` takes several values, so a file name right after it is
+  read as one of them and the command fails.
+
+From Python and for a whole table:
+
+```python
+res = fit_spectrum(spec, z=1.4362, phot=phot, line_insts=('LRS', 'PHOT'))
+```
+
+```
+./run_pah_fits.sh sources.csv -- --line-insts LRS PHOT
 ```
 
 
@@ -155,7 +191,7 @@ Example, with partly covered PAH features allowed and fluxes in Jy:
 | `--no-ice` | off | fix the 3.05 µm ice absorption to zero |
 | `--pahs ...` | 17 features | which PAH features to fit |
 | `--lines ...` | 22 lines | which emission lines to fit (`--lines` with no names fits none) |
-| `--line-insts LRS [IRS]` | `LRS` | which spectra contain emission lines (see below) |
+| `--line-insts LRS [IRS] [PHOT]` | `LRS` | which spectra contain emission lines; `PHOT` adds template-tied PAHs in photometry-only windows (see below) |
 | `--partial-pahs` | off | also fit PAH features only partly covered by the data (see below) |
 | `--min-coverage` | 0.3 | with `--partial-pahs`: minimum fraction of a feature on the data |
 | `--error-scaling local\|global\|none` | `local` | how uncertainties are scaled for fit quality (see below) |
@@ -226,6 +262,21 @@ F_ν(λ) = A(λ) [ continuum + Σ PAH_k + Σ line_j ],   A = (1 − e^−τ)/τ
   pixels, and a line that falls only in the IRS spectrum is not fit
   (`fitted` = False in the output). `--line-insts LRS IRS` fits lines in
   both spectra; `--line-insts IRS` in IRS only.
+- **PAHs in photometry-only windows (`PHOT`):** by default the model has no
+  PAH emission where there is no spectrum, so a photometric band covering
+  PAHs beyond the spectra (e.g. MIPS 24 µm on rest 8–12 µm when only LRS
+  data exist) sees only continuum. Adding `PHOT` (e.g.
+  `--line-insts LRS PHOT`) includes every requested PAH that is not fit from
+  the spectra but has at least 5% of its profile inside a filter's window.
+  These PAHs have no free parameters: each amplitude is the 6.2 µm PAH's
+  (or, if 6.2 µm is not fit from the spectra, the 3.3 µm PAH's) times its
+  ratio in the LRSz2 semi-empirical f_AGN < 10% template
+  (`templates/lrsz2_pah_fagn_bin1.txt`). They enter the filter integrals and
+  the model everywhere, are drawn dotted in the figure, and are listed in
+  the output table with `tied` = True, `tied_to` = the anchor and no S/N.
+  Their fluxes are predictions: on the LRSz2 sample they match the IRS
+  measurements to 0.0–0.2 dex in the median with 0.16–0.30 dex scatter,
+  which is not included in their errors.
 - **Instrumental resolution:** the model is smoothed pixel by pixel with each
   instrument's resolving power before it is compared with the data (MIRI LRS
   from the P750L curve; IRS from the Instrument Handbook values for each
