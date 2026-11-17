@@ -26,7 +26,6 @@ License: MIT (see `LICENSE`)
 | `requirements.txt` | Python packages |
 | `sb99-10myr.txt` | Starburst99 10 Myr stellar spectrum (continuum model) |
 | `templates/jwst_miri_p750l_disp_*.fits` | MIRI LRS (P750L) resolving power vs wavelength |
-| `templates/lrsz2_pah_fagn_bin1.txt` | PAH components of the LRSz2 semi-empirical f_AGN < 10% template (for `--line-insts ... PHOT`) |
 | `filters/svo/*.xml` | Filter transmission curves from the SVO Filter Profile Service: Spitzer/MIPS 24/70/160, Spitzer/IRAC 5.8/8.0, Spitzer/IRS blue peak-up, Herschel/PACS 70/100/160, JWST/MIRI F560W–F2550W, JWST/NIRCam F444W |
 | `example/` | Example table and two spectra from McKinney et al. 2026 (see Example data) |
 | `LICENSE` | MIT license |
@@ -270,8 +269,10 @@ F_ν(λ) = A(λ) [ continuum + Σ PAH_k + Σ line_j ],   A = (1 − e^−τ)/τ
   the spectra but has at least 5% of its profile inside a filter's window.
   These PAHs have no free parameters: each amplitude is the 6.2 µm PAH's
   (or, if 6.2 µm is not fit from the spectra, the 3.3 µm PAH's) times its
-  ratio in the LRSz2 semi-empirical f_AGN < 10% template
-  (`templates/lrsz2_pah_fagn_bin1.txt`). They enter the filter integrals and
+  flux ratio in the LRSz2 semi-empirical f_AGN < 10% template, at the
+  standard PAH centres and widths. The ratios are built into the code
+  (`PAH_TIE_RATIOS` in `measure_pahs_general.py`); no template file is
+  needed. They enter the filter integrals and
   the model everywhere, are drawn dotted in the figure, and are listed in
   the output table with `tied` = True, `tied_to` = the anchor and no S/N.
   Their fluxes are predictions: on the LRSz2 sample they match the IRS

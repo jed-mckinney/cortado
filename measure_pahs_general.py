@@ -64,10 +64,10 @@ component. The model is now forward-modelled:
     windows are modelled too: requested PAHs not fit from the spectra but with
     >= TIE_MIN_FRAC (5%) of their profile flux inside a photometric filter's
     window (or within one FWHM of a monochromatic point). They are not free:
-    each amplitude is the anchor PAH's (6.2 um if fit from the spectra, else
-    3.3 um) times the amplitude ratio in the LRSz2 semi-empirical f_AGN < 10%
-    template (templates/lrsz2_pah_fagn_bin1.txt; McKinney et al. 2026, ApJ,
-    1001, 93). On LRSz2, fitting LRS + photometry with PHOT lowers chi2 by a
+    each is set by the anchor PAH (6.2 um if fit from the spectra, else 3.3 um)
+    and the flux ratio in PAH_TIE_RATIOS, measured from the LRSz2
+    semi-empirical f_AGN < 10% template, at the standard PAH centres and
+    widths. On LRSz2, fitting LRS + photometry with PHOT lowers chi2 by a
     median 0.11 dex, and the tied 7.7-12.7 um PAH fluxes match the IRS
     measurements to within 0.0-0.2 dex (median) with 0.16-0.30 dex scatter,
     which is not in their errors (those come from the anchor only). Tied
@@ -355,25 +355,18 @@ def drude(lam, amp, x0, fwhm):
 PROFILES = {'lorentz': lorentz, 'drude': drude}
 
 # PAHs in photometry-only windows (line_insts contains 'PHOT') are tied to an anchor PAH fit
-# from the spectra, with the amplitude ratios of the LRSz2 semi-empirical f_AGN < 10% template
-# (intrinsic PAH components of the fagn_bin1 stack fit; McKinney et al. 2026, ApJ, 1001, 93).
-PAH_TEMPLATE_FILE = os.path.join(HERE, 'templates', 'lrsz2_pah_fagn_bin1.txt')
+# from the spectra. PAH_TIE_RATIOS are intrinsic (attenuation-corrected) flux ratios
+# F(PAH) / F(6.2 um), measured from the LRSz2 semi-empirical f_AGN < 10% template, the fit to
+# the stacked spectrum of the 12 LRSz2 galaxies with mid-IR AGN fraction < 10% (galaxies from
+# McKinney et al. 2026, ApJ, 1001, 93). 0 = not detected in the template.
+PAH_TIE_RATIOS = {
+	'PAH33': 0.1195, 'PAH34': 0.009643, 'PAH35': 0.02809,
+	'PAH52': 0., 'PAH53': 0., 'PAH57': 0., 'PAH62': 1.,
+	'PAH7b': 2.689, 'PAH7c': 1.893, 'PAH8a': 0.3859, 'PAH8b': 0.6713,
+	'PAH11a': 0., 'PAH11b': 1.141, 'PAH12a': 0.5098, 'PAH12b': 0.2672,
+}
 PAH_ANCHORS = ('PAH62', 'PAH33')     # in order of priority
 TIE_MIN_FRAC = 0.05                   # min fraction of a PAH's profile flux inside a photometric window
-_PAH_TEMPLATE = {}
-
-
-def load_pah_template(path=PAH_TEMPLATE_FILE):
-	"""{name: (x0 [um], fwhm [um], peak amplitude)} of the template PAH components."""
-	if path not in _PAH_TEMPLATE:
-		t = {}
-		for line in open(path):
-			if line.strip() and not line.startswith('#'):
-				n, x0, fw, a = line.split()
-				t[n] = (float(x0), float(fw), float(a))
-		amax = max(a for _, _, a in t.values())    # components fit to ~0 are exactly 0
-		_PAH_TEMPLATE[path] = {n: (x0, fw, a if a > 1e-6 * amax else 0.) for n, (x0, fw, a) in t.items()}
-	return _PAH_TEMPLATE[path]
 
 
 # ---------------------------------------------------------------- photometry
@@ -692,12 +685,12 @@ class MIRModel:
 		have at least TIE_MIN_FRAC of their Lorentzian profile flux inside a photometric window
 		(a filter's rest-frame range where T > cut * max T), or lie within one FWHM of a
 		monochromatic point. Their amplitudes are fixed multiples of the anchor PAH (6.2 um if
-		fit from the spectra, else 3.3 um), with the template's amplitude ratios; centres and
-		widths are the template's. Template components with ~zero amplitude (e.g. 11.23 um) are
-		tied with that ratio, so complex totals stay defined.
+		fit from the spectra, else 3.3 um), set so that their flux ratios to the anchor are those
+		of PAH_TIE_RATIOS, at the standard centres and widths of PAH_FEATURES. Features with a
+		zero ratio (e.g. 11.23 um) are tied at zero, so complex totals stay defined.
 		"""
-		tmpl = load_pah_template()
-		anchor = next((a for a in PAH_ANCHORS if a in self.pahs and a in tmpl), None)
+		R = PAH_TIE_RATIOS
+		anchor = next((a for a in PAH_ANCHORS if a in self.pahs), None)
 		windows = []
 		for f, lp in zip(self.filters, self.lam_phot):
 			if f is not None:
@@ -706,9 +699,9 @@ class MIRModel:
 		points = [lp for f, lp in zip(self.filters, self.lam_phot) if f is None]
 		cand = []
 		for n in pahs:
-			if n in self.pahs or n not in tmpl:
+			if n in self.pahs or n not in R:
 				continue
-			x0, fw, a = tmpl[n]
+			x0, fw = PAH_FEATURES[n]
 			frac = max([(np.arctan(2 * (hi - x0) / fw) - np.arctan(2 * (lo - x0) / fw)) / np.pi
 				for lo, hi in windows] + [0.])
 			if frac >= TIE_MIN_FRAC or any(abs(x0 - lp) <= fw for lp in points):
@@ -719,14 +712,16 @@ class MIRModel:
 			warnings.warn('PHOT: no 6.2 or 3.3 um PAH is fit from the spectra, so the PAHs in '
 				'photometry-only windows (%s) are not modelled' % ', '.join(cand))
 			return
-		a0 = tmpl[anchor][2]
+		xa, fa = PAH_FEATURES[anchor]
 		for n in cand:
-			x0, fw, a = tmpl[n]
-			self.tied[n] = (x0, fw, a / a0)
+			x0, fw = PAH_FEATURES[n]
+			# flux of a Lorentzian ∝ amp * fwhm / x0^2, so this amplitude ratio gives
+			# F(n) / F(anchor) = R[n] / R[anchor] (at the standard centres)
+			self.tied[n] = (x0, fw, R[n] / R[anchor] * (fa / fw) * (x0 / xa)**2)
 		self.pah_anchor = anchor
 
 	def tied_pah(self, p, name, lam):
-		"""Intrinsic profile of a tied PAH: template ratio x anchor amplitude."""
+		"""Intrinsic profile of a tied PAH: fixed amplitude ratio x anchor amplitude."""
 		x0, fw, r = self.tied[name]
 		return self.profile(lam, r * p[self.ix[self.pah_anchor + '_amp']], x0, fw)
 
